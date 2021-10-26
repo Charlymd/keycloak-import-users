@@ -54,10 +54,13 @@ kc_login() {
 }
 
 kc_create_user() {
+  #first name;last name;username;email;function;company
   firstname="$1"
   lastname="$2"
   username="$3"
   email="$4"
+  function="$5"
+  company="$6"
 
   result=$(curl -i -s -k --request POST \
   --header "Content-Type: application/json" \
@@ -67,7 +70,9 @@ kc_create_user() {
     "username": "'"$username"'",
     "email": "'"$email"'",
     "firstName": "'"$firstname"'",
-    "lastName": "'"$lastname"'"
+    "lastName": "'"$lastname"'",
+    "attributes": {"Olvid-position":"'"$position"'","Olvid-company":"'"$company"'"},
+    "requiredActions":["UPDATE_PASSWORD"]
   }' "$base_url/admin/realms/$realm/users")
 
   # userid=$(echo "$result" | grep -o "Location: .*" | egrep -o '[a-zA-Z0-9]+(-[a-zA-Z0-9]+)+') #parse userid
@@ -99,7 +104,7 @@ kc_lookup_username() {
   --header "Authorization: Bearer $access_token" \
   "$base_url/admin/realms/$realm/users?username=${username}")
 
-  userid=`echo $result | grep -Eo '"id":.*?[^\\]"' | cut -d':'  -f 2 | sed -e 's/"//g'`
+  userid=`echo $result | grep -Eo '"id":.*?[^\\]"' | cut -d':'  -f 2 | sed -e 's/"//g' | cut -d',' -f 1`
   
   msg="$username: lookup "
   process_result "200" "$result" "$msg"
@@ -167,18 +172,19 @@ unit_test() {
 
 ## Bulk import accounts
 # Reads and creates accounts using a CSV file as the source
-# CSV file format: "first name, last name, username, email, password"
+
 import_accts() {
   kc_login
 
   # Import accounts line-by-line
   while read -r line; do
-    IFS=',' read -ra arr <<< "$line"
+    IFS=';' read -ra arr <<< "$line"
+    
+    # CSV file format: "first name[0];last name[1];username[2];email[3];function[4];company[5];group[6];password[7]"
+    kc_create_user "${arr[0]}" "${arr[1]}" "${arr[2]}" "${arr[3]}" "${arr[4]}" "${arr[5]}"
 
-    kc_create_user "${arr[0]}" "${arr[1]}" "${arr[2]}" "${arr[3]}"
-
-    [ $? -ne 0 ] || kc_set_pwd "$userid" "${arr[4]}"  #skip if kc_create_user failed
-    [ $? -ne 0 ] || kc_set_group_hard "$userid" "${arr[5]}" #skip if kc_create_user failed
+    [ $? -ne 0 ] || kc_set_pwd "$userid" "${arr[7]}"  #skip if kc_create_user failed
+    [ $? -ne 0 ] || kc_set_group_hard "$userid" "${arr[6]}" #skip if kc_create_user failed
   done < "$csv_file"
 
   #kc_logout
