@@ -1,0 +1,5 @@
+base_url="https://192.168.0.128:8443/auth"
+realm="myRealm"
+client_id="keycloak_acct_admin"
+admin_id="adminName"
+admin_pwd="superPassword"
