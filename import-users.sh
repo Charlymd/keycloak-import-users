@@ -8,6 +8,7 @@ userid=""
 realm=""
 client_id=""
 
+
 #### Helpers
 process_result() {
   expected_status="$1"
@@ -29,12 +30,18 @@ process_result() {
 }
 
 kc_login() {
-  read -p "Base URL (e.g: https://myhostname/auth): " base_url
-  read -p "Realm: " realm
-  read -p "Client ID (create this client in the above Keycloak realm): " client_id
-  read -p "Admin username: " admin_id
-  read -s -p "Admin Password: " admin_pwd; echo
-
+  if [ -f "keycloak.conf" ]; then
+    source keycloak.conf && conf=1
+    else echo "no configuration file keycloak.conf"; conf=0
+  fi
+  if [ $conf -ne 1 ]; then
+    read -p "Base URL (e.g: https://myhostname/auth): " base_url
+    read -p "Realm: " realm
+    read -p "Client ID (create this client in the above Keycloak realm): " client_id
+    read -p "Admin username: " admin_id
+    read -s -p "Admin Password: " admin_pwd
+  fi
+  
   result=$(curl --write-out " %{http_code}" -s -k --request POST \
     --header "Content-Type: application/x-www-form-urlencoded" \
     --data "username=$admin_id&password=$admin_pwd&client_id=$client_id&grant_type=password" \
@@ -204,17 +211,17 @@ delete_accts(){
 #### Main
 if [ $# -lt 1 ]; then
   echo "Keycloak account admin script"
-  echo "Usage: $0 [--test | --delete | --import csv_file]"
+  echo "Usage: $0 [--test | --delete | --import csv_file | --login_only]"
   exit 1
 fi
 
 flag=$1
 
 case $flag in
-  "--test" )
+  -t|--test)
     unit_test
     ;;
-        "--delete" )
+  -d|--delete)
     csv_file="$2"
     if [ -z "$csv_file" ]; then
       echo "Error: missing 'csv_file' argument"
@@ -222,10 +229,10 @@ case $flag in
     fi
     delete_accts $csv_file
     ;;
-        "--lookup" )
+  -l|--login_only)
           kc_login
                 ;;
-  "--import")
+  -i|--import)
     csv_file="$2"
     if [ -z "$csv_file" ]; then
       echo "Error: missing 'csv_file' argument"
