@@ -7,7 +7,7 @@ refresh_token=""
 userid=""
 realm=""
 client_id=""
-
+groupid=""
 
 #### Helpers
 process_result() {
@@ -20,10 +20,10 @@ process_result() {
 
   printf "[HTTP $actual_status] $msg "
   if [ "$actual_status" == "$expected_status" ]; then
-    echo "successful"
+    echo "[successful]"
     return 0
   else
-    echo "failed"
+    echo "[failed]"
     echo -e "\t$err_msg"
     return 1
   fi
@@ -66,7 +66,7 @@ kc_create_user() {
   lastname="$2"
   username="$3"
   email="$4"
-  function="$5"
+  position="$5"
   company="$6"
 
   result=$(curl -i -s -k --request POST \
@@ -82,11 +82,8 @@ kc_create_user() {
     "requiredActions":["UPDATE_PASSWORD"]
   }' "$base_url/admin/realms/$realm/users")
 
-  # userid=$(echo "$result" | grep -o "Location: .*" | egrep -o '[a-zA-Z0-9]+(-[a-zA-Z0-9]+)+') #parse userid
-  # userid=`echo $userid | awk '{ print $2 }'`
   http_code=$(sed -E -n 's,HTTP[^ ]+ ([0-9]{3}) .*,\1,p' <<< "$result") #parse HTTP coded
-  kc_lookup_username $username
-  msg="$username: insert ($userid)"
+  msg="action:create user   value:$username"
   process_result "201" "$http_code" "$msg"
   return $? #return status from process_result
 }
@@ -98,36 +95,83 @@ kc_delete_user() {
   --header "Authorization: Bearer $access_token" \
   "$base_url/admin/realms/$realm/users/$userid")
 
-  msg="$username: delete"
+  msg="action:delete user   value:$username"
   process_result "204" "$result" "$msg"
   return $? #return status from process_result
 }
 
-# Convert name to uuid  setting  global userid ( This should really return etc. )
+# Convert name to global userid
 kc_lookup_username() {
   username="$1"
 
   result=$(curl --write-out " %{http_code}" -s -k --request GET \
   --header "Authorization: Bearer $access_token" \
   "$base_url/admin/realms/$realm/users?username=${username}")
-
-  userid=`echo $result | grep -Eo '"id":.*?[^\\]"' | cut -d':'  -f 2 | sed -e 's/"//g' | cut -d',' -f 1`
   
-  msg="$username: lookup "
+  userid=`echo $result | grep -Eo '"id":".*?"' | cut -d':'  -f 2 | sed -e 's/"//g' | cut -d',' -f 1`
+  msg="action:lookup user   value:$username"
   process_result "200" "$result" "$msg"
   return $? #return status from process_result
   
 }
 
-kc_set_group_hard() {
+kc_create_group() {
+  groupname="$1"
+
+  result=$(curl -i -s -k --request POST \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer $access_token" \
+  --data '{
+    "name": "'"$groupname"'"
+  }' "$base_url/admin/realms/$realm/groups")
+
+  http_code=$(sed -E -n 's,HTTP[^ ]+ ([0-9]{3}) .*,\1,p' <<< "$result") #parse HTTP coded
+  msg="action:create group  value:$groupname"
+  process_result "201" "$http_code" "$msg"
+  return $? #return status from process_result
+}
+
+kc_delete_group() {
+  groupname="$1"
+  kc_lookup_group $groupname
+
+  result=$(curl -i -s -k --request DELETE \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer $access_token" \
+  "$base_url/admin/realms/$realm/groups/$groupid")
+
+  http_code=$(sed -E -n 's,HTTP[^ ]+ ([0-9]{3}) .*,\1,p' <<< "$result") #parse HTTP coded
+  msg="action:delete group  value:$groupname"
+  process_result "204" "$http_code" "$msg"
+  return $? #return status from process_result
+}
+
+
+# Convert group name to groupid
+kc_lookup_group() {
+  group="$1"
+
+  result=$(curl --write-out " %{http_code}" -s -k --request GET \
+  --header "Authorization: Bearer $access_token" \
+  "$base_url/admin/realms/$realm/groups?first=0&last=1&search=${group}")
+  groupid=`echo $result | grep -Eo '"id":".*?"' | cut -d':'  -f 2 | sed -e 's/"//g' | cut -d',' -f 1`
+  msg="action:lookup group  value:$group  id=$groupid"
+  process_result "200" "$result" "$msg"
+  return $? #return status from process_result
+  
+}
+
+
+kc_set_group() {
   userid="$1"
   groupid="$2"
+
 
   result=$(curl --write-out " %{http_code}" -s -k --request PUT \
   --header "Content-Type: application/json" \
   --header "Authorization: Bearer $access_token" \
    "$base_url/admin/realms/$realm/users/$userid/groups/$groupid")
-  msg="$username: group $groupid set"
+  msg="action:group set     value:$groupid"
   process_result "204" "$result" "$msg"
   return $? #return status from process_result
 }
@@ -143,8 +187,9 @@ kc_set_pwd() {
     "type": "password",
     "value": "'"$password"'",
     "temporary": "true"
-  }' "$base_url/admin/realms/$realm/users/$userid/reset-password")
-  msg="$username: password set to $password"
+  }' \
+  "$base_url/admin/realms/$realm/users/$userid/reset-password")
+  msg="action:setpassword   value:$password"
   process_result "204" "$result" "$msg"
   return $? #return status from process_result
 }
@@ -155,7 +200,7 @@ kc_logout() {
   --data "client_id=$client_id&refresh_token=$refresh_token" \
   "$base_url/realms/$realm/protocol/openid-connect/logout")
 
-  msg="Logout"
+  msg="action:logout"
   process_result "204" "$result" "$msg" #print HTTP status message
   return $? #return status from process_result
 }
@@ -165,16 +210,15 @@ kc_logout() {
 unit_test() {
   echo "Testing normal behaviour. These operations should succeed"
   kc_login
-  kc_create_user john joe johnjoe john@example.com
-  kc_set_pwd $userid ":Frepsip4"
-  kc_set_group_hard $userid 600be026-886a-428e-8318-31fde5dac452
+  kc_create_user john doe john.doe john@example.com
+  kc_lookup_username "john.doe"
+  kc_set_pwd $userid "test"
+  kc_create_group "group1"
+  kc_lookup_group "group1"
+  kc_set_group $userid $groupid
   kc_delete_user $userid 
+  kc_delete_group "group1"
   kc_logout
-
-  #echo "Testing abnormal behaviour. These operations should fail"
-  #kc_create_user john tan johntan john@tan.com #try to create acct after logout
-  #kc_set_pwd "johntan" "testT3st"
-  #kc_delete_user "johntan" #try to delete acct after logout
 }
 
 ## Bulk import accounts
@@ -187,21 +231,30 @@ import_accts() {
   while read -r line; do
     IFS=';' read -ra arr <<< "$line"
     
-    # CSV file format: "first name[0];last name[1];username[2];email[3];function[4];company[5];group[6];password[7]"
+    # CSV file format: "first name[0];last name[1];username[2];email[3];position[4];company[5];group[6];password[7]"
     kc_create_user "${arr[0]}" "${arr[1]}" "${arr[2]}" "${arr[3]}" "${arr[4]}" "${arr[5]}"
+   
+    # find user_id of new user 
+    kc_lookup_username "${arr[2]}"
+    if [ "${arr[6]}" ]; then
+      if (kc_lookup_group ${arr[6]}); then
+         kc_create_group ${arr[6]};
+         kc_lookup_group ${arr[6]}
+      fi
 
-    [ $? -ne 0 ] || kc_set_pwd "$userid" "${arr[7]}"  #skip if kc_create_user failed
-    [ $? -ne 0 ] || kc_set_group_hard "$userid" "${arr[6]}" #skip if kc_create_user failed
+      kc_set_group "$userid" $groupid
+    fi #skip no group
+    if [ "${arr[7]}" ]; then kc_set_pwd "$userid" "${arr[7]}" ; fi  #skip if no password
   done < "$csv_file"
 
-  #kc_logout
+  kc_logout
 }
 
 delete_accts(){
 
-        kc_login
+  kc_login
   while read -r line; do
-    IFS=',' read -ra arr <<< "$line"
+    IFS=';' read -ra arr <<< "$line"
           kc_lookup_username "${arr[2]}"
           kc_delete_user $userid
   done < "$csv_file"
@@ -211,7 +264,7 @@ delete_accts(){
 #### Main
 if [ $# -lt 1 ]; then
   echo "Keycloak account admin script"
-  echo "Usage: $0 [--test | --delete | --import csv_file | --login_only]"
+  echo "Usage: $0 [--test | --delete csv_file | --import csv_file | --login_only]"
   exit 1
 fi
 
