@@ -78,7 +78,7 @@ kc_create_user() {
     "email": "'"$email"'",
     "firstName": "'"$firstname"'",
     "lastName": "'"$lastname"'",
-    "attributes": {"Olvid-position":"'"$position"'","Olvid-company":"'"$company"'"},
+    "attributes": {"olvid-position":"'"$position"'","olvid-company":"'"$company"'"},
     "requiredActions":["UPDATE_PASSWORD"]
   }' "$base_url/admin/realms/$realm/users")
 
@@ -109,7 +109,7 @@ kc_lookup_username() {
   "$base_url/admin/realms/$realm/users?username=${username}")
   
   userid=`echo $result | grep -Eo '"id":".*?"' | cut -d':'  -f 2 | sed -e 's/"//g' | cut -d',' -f 1`
-  msg="action:lookup user   value:$username"
+  msg="action:lookup user   value:$username  userid:$userid"
   process_result "200" "$result" "$msg"
   return $? #return status from process_result
   
@@ -153,7 +153,7 @@ kc_lookup_group() {
 
   result=$(curl --write-out " %{http_code}" -s -k --request GET \
   --header "Authorization: Bearer $access_token" \
-  "$base_url/admin/realms/$realm/groups?first=0&last=1&search=${group}")
+  "$base_url/admin/realms/$realm/groups?first=0&last=1&search=$group")
   groupid=`echo $result | grep -Eo '"id":".*?"' | cut -d':'  -f 2 | sed -e 's/"//g' | cut -d',' -f 1`
   msg="action:lookup group  value:$group  id=$groupid"
   process_result "200" "$result" "$msg"
@@ -189,7 +189,7 @@ kc_set_pwd() {
     "temporary": "true"
   }' \
   "$base_url/admin/realms/$realm/users/$userid/reset-password")
-  msg="action:setpassword   value:$password"
+  msg="action:setpassword   value:$password     userid:$userid"
   process_result "204" "$result" "$msg"
   return $? #return status from process_result
 }
@@ -212,9 +212,9 @@ unit_test() {
   kc_login
   kc_create_user john doe john.doe john@example.com
   kc_lookup_username "john.doe"
-  kc_set_pwd $userid "test"
+  kc_set_pwd $userid "1@test"
   kc_create_group "group1"
-  kc_lookup_group "group1"
+  kc_lookup_group $groupid
   kc_set_group $userid $groupid
   kc_delete_user $userid 
   kc_delete_group "group1"
@@ -233,17 +233,23 @@ import_accts() {
     
     # CSV file format: "first name[0];last name[1];username[2];email[3];position[4];company[5];group[6];password[7]"
     kc_create_user "${arr[0]}" "${arr[1]}" "${arr[2]}" "${arr[3]}" "${arr[4]}" "${arr[5]}"
-   
+    
     # find user_id of new user 
     kc_lookup_username "${arr[2]}"
+    
     if [ "${arr[6]}" ]; then
-      if (kc_lookup_group ${arr[6]}); then
-         kc_create_group ${arr[6]};
-         kc_lookup_group ${arr[6]}
+      if !(kc_lookup_group ${arr[6]}); then
+           echo "group does not exist";
+           kc_create_group ${arr[6]};
+           kc_lookup_group ${arr[6]};
+         else
+           echo "group already exist"
+           kc_lookup_group ${arr[6]};
       fi
 
       kc_set_group "$userid" $groupid
     fi #skip no group
+    
     if [ "${arr[7]}" ]; then kc_set_pwd "$userid" "${arr[7]}" ; fi  #skip if no password
   done < "$csv_file"
 
