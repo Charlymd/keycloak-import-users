@@ -41,7 +41,7 @@ kc_login() {
     read -p "Admin username: " admin_id
     read -s -p "Admin Password: " admin_pwd
   fi
-  
+
   result=$(curl --write-out " %{http_code}" -s -k --request POST \
     --header "Content-Type: application/x-www-form-urlencoded" \
     --data "username=$admin_id&password=$admin_pwd&client_id=$client_id&grant_type=password" \
@@ -100,19 +100,37 @@ kc_delete_user() {
   return $? #return status from process_result
 }
 
-# Convert name to global userid
+## Convert name to global userid
 kc_lookup_username() {
   username="$1"
 
   result=$(curl --write-out " %{http_code}" -s -k --request GET \
   --header "Authorization: Bearer $access_token" \
   "$base_url/admin/realms/$realm/users?username=${username}")
-  
+
   userid=`echo $result | grep -Eo '"id":".*?"' | cut -d':'  -f 2 | sed -e 's/"//g' | cut -d',' -f 1`
   msg="action:lookup user   value:$username  userid:$userid"
   process_result "200" "$result" "$msg"
+ return $? #return status from process_result
+}
+
+## Check existing of user
+kc_exist_username() {
+  username="$1"
+
+  result=$(curl --write-out " %{http_code}" -s -k --request GET \
+  --header "Authorization: Bearer $access_token" \
+  "$base_url/admin/realms/$realm/users?username=${username}")
+
+  userid=`echo $result | grep -Eo '"id":".*?"' | cut -d':'  -f 2 | sed -e 's/"//g' | cut -d',' -f 1`
+  if [ $userid ];  then
+      echo "action:user exist   value:$username  userid:$userid";
+    else
+      echo "action:user doesnt exist   value:$username";
+      echo "action:user doesnt exist   value:$username" >> /tmp/kc_check_users.log;
+  fi
+  process_result "200" "$result" "$msg"
   return $? #return status from process_result
-  
 }
 
 kc_create_group() {
@@ -158,7 +176,7 @@ kc_lookup_group() {
   msg="action:lookup group  value:$group  id=$groupid"
   process_result "200" "$result" "$msg"
   return $? #return status from process_result
-  
+
 }
 
 
@@ -216,10 +234,30 @@ unit_test() {
   kc_create_group "group1"
   kc_lookup_group $groupid
   kc_set_group $userid $groupid
-  kc_delete_user $userid 
+  kc_delete_user $userid
   kc_delete_group "group1"
   kc_logout
 }
+
+kc_check_users() {
+  kc_login
+  rm -f /tmp/kc_check_users.csv
+  rm -f /tmp/kc_check_users.log
+  # Import accounts line-by-line
+  while read -r line; do
+    IFS=';' read -ra arr <<< "$line"
+    # CSV file format: "first name[0];last name[1];username[2];email[3];position[4];company[5];group[6];password[7]"
+    # check existing of user from CSV in keycloak
+    kc_exist_username "${arr[2]}"
+    if [ $? -ne 0 ]; then
+      echo "$line" >> /tmp/kc_check_users.csv
+    fi
+  done < "$csv_file"
+  kc_logout
+  echo "log: /tmp/kc_check_users.log";
+  echo "error users csv : /tmp/kc_check_users.csv";
+}
+
 
 ## Bulk import accounts
 # Reads and creates accounts using a CSV file as the source
@@ -230,13 +268,13 @@ import_accts() {
   # Import accounts line-by-line
   while read -r line; do
     IFS=';' read -ra arr <<< "$line"
-    
+
     # CSV file format: "first name[0];last name[1];username[2];email[3];position[4];company[5];group[6];password[7]"
     kc_create_user "${arr[0]}" "${arr[1]}" "${arr[2]}" "${arr[3]}" "${arr[4]}" "${arr[5]}"
-    
-    # find user_id of new user 
+
+    # find user_id of new user
     kc_lookup_username "${arr[2]}"
-    
+
     if [ "${arr[6]}" ]; then
       if !(kc_lookup_group ${arr[6]}); then
            echo "group does not exist";
@@ -249,7 +287,7 @@ import_accts() {
 
       kc_set_group "$userid" $groupid
     fi #skip no group
-    
+
     if [ "${arr[7]}" ]; then kc_set_pwd "$userid" "${arr[7]}" ; fi  #skip if no password
   done < "$csv_file"
 
@@ -264,7 +302,7 @@ delete_accts(){
           kc_lookup_username "${arr[2]}"
           kc_delete_user $userid
   done < "$csv_file"
- 
+
 }
 
 #### Main
@@ -289,8 +327,8 @@ case $flag in
     delete_accts $csv_file
     ;;
   -l|--login_only)
-          kc_login
-                ;;
+    kc_login
+    ;;
   -i|--import)
     csv_file="$2"
     if [ -z "$csv_file" ]; then
@@ -298,6 +336,10 @@ case $flag in
       exit 1
     fi
     import_accts $csv_file
+    ;;
+  -c|--check_users)
+    csv_file="$2"
+    kc_check_users
     ;;
   *)
     echo "Unrecognised flag '$flag'"
