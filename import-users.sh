@@ -204,13 +204,37 @@ kc_set_pwd() {
   --data '{
     "type": "password",
     "value": "'"$password"'",
-    "temporary": "true"
+    "temporary": false
   }' \
   "$base_url/admin/realms/$realm/users/$userid/reset-password")
   msg="action:setpassword   value:$password     userid:$userid"
   process_result "204" "$result" "$msg"
   return $? #return status from process_result
 }
+
+kc_reset_temporary_flag()  {
+  kc_login
+  user="$1"
+  kc_lookup_username "$user"
+
+  result=$(curl --write-out " %{http_code}" -s -k --request PUT \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer $access_token" \
+  --data '{
+    "credentials": [
+        {
+          "type": "password",
+          "temporary": false,
+          "value": "TemporaryPasswordForCheck"
+        }
+     ]
+  }' \
+  "$base_url/admin/realms/$realm/users/$userid")
+  msg="action:reset temporary password flag   value:false    userid:$userid"
+  process_result "204" "$result" "$msg"
+  return $? #return status from process_result
+}
+
 
 kc_logout() {
   result=$(curl --write-out " %{http_code}" -s -k --request POST \
@@ -340,6 +364,10 @@ case $flag in
   -c|--check_users)
     csv_file="$2"
     kc_check_users
+    ;;
+  -r|--reset_temporary_password)
+    user_id="$2"
+    kc_reset_temporary_flag $user_id
     ;;
   *)
     echo "Unrecognised flag '$flag'"
