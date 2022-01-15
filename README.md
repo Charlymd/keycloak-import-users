@@ -5,11 +5,14 @@ Add some functions from original repository (UKHomeOffice:keycloak-utils):
 - autologon configuration file
 - password fix
 - group management (create / lookup /delete)
-- Add Olvid Attributes
+- Add Olvid Attributes (position, company)
 - use ';' like seperator and UTF-8
 - clarify log
+- update account from CSV
 
-## [import-users.sh](./import-users.sh) - Administer Keycloak accounts from the command-line
+
+
+## [manage-users.sh](./manage-users.sh) - Administer Keycloak accounts from the command-line
 See [users.csv](./users.csv.example) for example format.
 ### Prerequisites in the Keycloak realm:
 1. Create client (eg. keycloak_acct_admin) for this script. Access Type: public.
@@ -19,19 +22,20 @@ See [users.csv](./users.csv.example) for example format.
 
 
 Available flag :
-./import-users [--test | --delete csv_file | --import csv_file | --login_only]
+./manage-users.sh [--test | --delete csv_file | --import csv_file | --login_only | --ex
+~                                                                                              port_users | --update_users csv_file
 
 ### Import users found in csv
-./import-users.sh --import users.csv
+./manage-users.sh --import users.csv
 
 ### Delete users found in csv
-./import-users.sh --delete users.csv
+./manage-users.sh --delete users.csv
 
 ### autologon configuration file
 Offer capability to store configuration and bypass prompt for configuration 
 - copy keycloak.conf.example as keycloak.conf
 - insert information and credential
-- try it with this command ./import-users.sh --login_only 
+- try it with this command ./manage-users.sh --login_only 
 
 
 ### Unit test

@@ -88,6 +88,38 @@ kc_create_user() {
   return $? #return status from process_result
 }
 
+# update only information of user without password
+kc_update_user() {
+  #first name;last name;username;email;position;company
+  firstname="$1"
+  lastname="$2"
+  username="$3"
+  email="$4"
+  position="$5"
+  company="$6"
+  update_comment="$7"
+
+  kc_lookup_username "$username"
+  
+  result=$(curl -i -s -k --request PUT \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer $access_token" \
+  --data '{
+    "enabled": "true",
+    "username": "'"$username"'",
+    "firstName": "'"$firstname"'",
+    "lastName": "'"$lastname"'",
+    "attributes": {"olvid-position":"'"$position"'","olvid-company":"'"$company"'"}
+  }' "$base_url/admin/realms/$realm/users/$userid")
+
+  http_code=$(sed -E -n 's,HTTP[^ ]+ ([0-9]{3}) .*,\1,p' <<< "$result") #parse HTTP coded
+  msg="action:update user   value:$username"
+  process_result "204" "$http_code" "$msg"
+  return $? #return status from process_result
+
+}
+
+
 kc_delete_user() {
   userid="$1"
 
@@ -127,28 +159,12 @@ kc_exist_username() {
       echo "action:user exist   value:$username  userid:$userid";
     else
       echo "action:user doesnt exist   value:$username";
-      echo "action:user doesnt exist   value:$username" >> /tmp/kc_check_users.log;
+      echo "action:user doesnt exist   value:$username" >> /tmp/compare_users.log;
   fi
   process_result "200" "$result" "$msg"
   return $? #return status from process_result
 }
 
-# export single user
-kc_export_users() {
-  kc_login
-  result=$(curl --write-out " %{http_code}" -s -k --request GET \
-  --header "Authorization: Bearer $access_token" \
-  "$base_url/admin/realms/$realm/users?first=0") 
-  #"$base_url/admin/realms/$realm/users?briefRepresentation=true&first=0&max=10") 
-  rm -f /tmp/export_users_keycloak.csv
-  echo "$result" | jq -r '.[] | [.username,.lastName,.firstName,.attributes."olvid-company"[0],.attributes."olvid-position"[0]] | @csv' >> /tmp/export_users_keycloak.csv
-
-  msg="action:export list of user"
-  process_result "200" "$result" "$msg"
-  echo "200 iterate error is normal, it's HTTP status at the end of request"
-  echo "export file: /tmp/export_users_keycloak.csv";
- return $? #return status from process_result
-}
 
 kc_create_group() {
   groupname="$1"
@@ -200,8 +216,6 @@ kc_lookup_group() {
 kc_set_group() {
   userid="$1"
   groupid="$2"
-
-
   result=$(curl --write-out " %{http_code}" -s -k --request PUT \
   --header "Content-Type: application/json" \
   --header "Authorization: Bearer $access_token" \
@@ -211,10 +225,10 @@ kc_set_group() {
   return $? #return status from process_result
 }
 
+
 kc_set_pwd() {
   userid="$1"
   password="$2"
-
   result=$(curl --write-out " %{http_code}" -s -k --request PUT \
   --header "Content-Type: application/json" \
   --header "Authorization: Bearer $access_token" \
@@ -229,6 +243,7 @@ kc_set_pwd() {
   return $? #return status from process_result
 }
 
+
 kc_logout() {
   result=$(curl --write-out " %{http_code}" -s -k --request POST \
   --header "Content-Type: application/x-www-form-urlencoded" \
@@ -240,10 +255,13 @@ kc_logout() {
   return $? #return status from process_result
 }
 
+
+######### autonomous functions #############
+
 ## Unit tests for helper functions
 # Use this to check that the helper functions work
 unit_test() {
-  echo "Testing normal behaviour. These operations should succeed"
+  echo "Testing normal behaviour with static information. These operations should succeed"
   kc_login
   kc_create_user john doe john.doe john@example.com
   kc_lookup_username "john.doe"
@@ -256,32 +274,79 @@ unit_test() {
   kc_logout
 }
 
+
 # check existing of user from CSV in Keycloak
-kc_check_users() {
+compare_users() {
   kc_login
-  rm -f /tmp/kc_check_users.csv
-  rm -f /tmp/kc_check_users.log
+  rm -f /tmp/compare_users.csv
+  rm -f /tmp/compare_users.log
   # Import accounts line-by-line
   while read -r line; do
     IFS=';' read -ra arr <<< "$line"
     # CSV file format: "first name[0];last name[1];username[2];email[3];position[4];company[5];group[6];password[7]"
     kc_exist_username "${arr[2]}"
     if [ $? -ne 0 ]; then
-      echo "$line" >> /tmp/kc_check_users.csv
+      echo "$line" >> /tmp/compare_users.csv
     fi
   done < "$csv_file"
   kc_logout
-  echo "log: /tmp/kc_check_users.log";
-  echo "error users csv : /tmp/kc_check_users.csv";
+  echo "log: /tmp/compare_users.log";
+  echo "error users csv : /tmp/compare_users.csv";
 }
 
 
-## Bulk import accounts
-# Reads and creates accounts using a CSV file as the source
+# export every users
+export_users() {
+  kc_login
+  result=$(curl --write-out " %{http_code}" -s -k --request GET \
+  --header "Authorization: Bearer $access_token" \
+  "$base_url/admin/realms/$realm/users?first=0") 
+  #"$base_url/admin/realms/$realm/users?briefRepresentation=true&first=0&max=10") 
+  rm -f /tmp/export_users_keycloak.csv
+  echo "$result" | jq -r '.[] | [.username,.lastName,.firstName,.attributes."olvid-company"[0],.attributes."olvid-position"[0]] | @csv' >> /tmp/export_users_keycloak.csv
 
+  msg="action:export list of user"
+  process_result "200" "$result" "$msg"
+  echo "200 iterate error is normal, it's HTTP status at the end of request"
+  echo "export file: /tmp/export_users_keycloak.csv";
+ return $? #return status from process_result
+}
+
+
+update_users() {
+  kc_login
+  # Import accounts line-by-line
+  while read -r line; do
+    IFS=';' read -ra arr <<< "$line"
+
+    # CSV file format: "first name[0];last name[1];username[2];email[3];position[4];company[5];group[6];password[7]"
+    kc_update_user "${arr[0]}" "${arr[1]}" "${arr[2]}" "${arr[3]}" "${arr[4]}" "${arr[5]}"
+
+    # update or skip when no group	    
+    if [ "${arr[6]}" ]; then
+      if !(kc_lookup_group ${arr[6]}); then
+           echo "group does not exist";
+           kc_create_group ${arr[6]};
+           kc_lookup_group ${arr[6]};
+         else
+           echo "group already exist"
+           kc_lookup_group ${arr[6]};
+      fi
+      kc_set_group "$userid" $groupid
+    fi
+    
+    # update or skip when no password
+    if [ "${arr[7]}" ]; then kc_set_pwd "$userid" "${arr[7]}" ; fi
+  done < "$csv_file"
+
+  kc_logout
+}
+
+
+# Bulk import accounts
+# Reads and creates accounts using a CSV file as the source
 import_accts() {
   kc_login
-
   # Import accounts line-by-line
   while read -r line; do
     IFS=';' read -ra arr <<< "$line"
@@ -311,21 +376,21 @@ import_accts() {
   kc_logout
 }
 
-delete_accts(){
 
+delete_accts(){
   kc_login
   while read -r line; do
     IFS=';' read -ra arr <<< "$line"
           kc_lookup_username "${arr[2]}"
           kc_delete_user $userid
   done < "$csv_file"
-
 }
 
 #### Main
 if [ $# -lt 1 ]; then
   echo "Keycloak account admin script"
-  echo "Usage: $0 [--test | --delete csv_file | --import csv_file | --login_only | --export_users]"
+  echo "Usage: $0 [--test | --delete csv_file | --import csv_file | --login_only | --export_users | --update_users csv_file comment]"
+  echo "Usage: $0 [-t | -d csv_file | -i csv_file | -l | -e | -u csv_file comment]"
   exit 1
 fi
 
@@ -346,6 +411,15 @@ case $flag in
   -l|--login_only)
     kc_login
     ;;
+  -u|--update_users)
+    csv_file="$2"
+    update_comment="$3"
+    if [ -z "$csv_file" ]; then
+      echo "Error: missing 'csv_file' argument"
+      exit 1
+    fi
+    update_users $csv_file $update_comment
+    ;;
   -i|--import)
     csv_file="$2"
     if [ -z "$csv_file" ]; then
@@ -354,12 +428,12 @@ case $flag in
     fi
     import_accts $csv_file
     ;;
-  -c|--check_users)
+  -c|--compare_users)
     csv_file="$2"
-    kc_check_users
+    compare_users
     ;;
   -e|--export_users)
-    kc_export_users
+    export_users
     ;;
   *)
     echo "Unrecognised flag '$flag'"
