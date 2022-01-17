@@ -335,7 +335,8 @@ update_users() {
 
     # update or skip when no group	    
     if [ "${arr[6]}" ]; then
-      if !(kc_lookup_group ${arr[6]}); then
+      kc_lookup_group ${arr[6]}	    
+      if ["$groupid" == ""]; then
            echo "group does not exist";
            kc_create_group ${arr[6]};
            kc_lookup_group ${arr[6]};
