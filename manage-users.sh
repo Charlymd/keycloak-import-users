@@ -292,7 +292,7 @@ compare_users() {
     kc_exist_username "${arr[2]}"
     if [ $? -ne 0 ]; then
       echo "$line" >> /tmp/compare_users.csv
-      compteur_notexist=$compteur_notre_users.logexist+1
+      compteur_notexist=$compteur_notre_users+1
     else
       compteur_exist=$compteur_exist+1
     fi
@@ -370,13 +370,14 @@ import_accts() {
     kc_lookup_username "${arr[2]}"
 
     if [ "${arr[6]}" ]; then
-      if !(kc_lookup_group ${arr[6]}); then
+      kc_lookup_group "${arr[6]}";
+      if ["$groupid" == ""]; then
            echo "group does not exist";
-           kc_create_group ${arr[6]};
-           kc_lookup_group ${arr[6]};
+           kc_create_group "${arr[6]}";
+           kc_lookup_group "${arr[6]}";
          else
            echo "group already exist"
-           kc_lookup_group ${arr[6]};
+           kc_lookup_group "${arr[6]}";
       fi
 
       kc_set_group "$userid" $groupid
