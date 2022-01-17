@@ -8,6 +8,8 @@ userid=""
 realm=""
 client_id=""
 groupid=""
+declare -i compteur_exist=0
+declare -i compteur_notexist=0
 
 #### Helpers
 process_result() {
@@ -97,10 +99,9 @@ kc_update_user() {
   email="$4"
   position="$5"
   company="$6"
-  update_comment="$7"
-
-  kc_lookup_username "$username"
   
+  kc_lookup_username "$username"
+  echo $fistname $lastname $position $company
   result=$(curl -i -s -k --request PUT \
   --header "Content-Type: application/json" \
   --header "Authorization: Bearer $access_token" \
@@ -109,6 +110,7 @@ kc_update_user() {
     "username": "'"$username"'",
     "firstName": "'"$firstname"'",
     "lastName": "'"$lastname"'",
+    "email": "'"$email"'",
     "attributes": {"olvid-position":"'"$position"'","olvid-company":"'"$company"'"}
   }' "$base_url/admin/realms/$realm/users/$userid")
 
@@ -157,9 +159,12 @@ kc_exist_username() {
   userid=`echo $result | grep -Eo '"id":".*?"' | cut -d':'  -f 2 | sed -e 's/"//g' | cut -d',' -f 1`
   if [ $userid ];  then
       echo "action:user exist   value:$username  userid:$userid";
+      echo "action:user exist   value:$username  userid:$userid" >> /tmp/compare_users.log;
+
     else
       echo "action:user doesnt exist   value:$username";
       echo "action:user doesnt exist   value:$username" >> /tmp/compare_users.log;
+      return 2 ; break
   fi
   process_result "200" "$result" "$msg"
   return $? #return status from process_result
@@ -287,12 +292,18 @@ compare_users() {
     kc_exist_username "${arr[2]}"
     if [ $? -ne 0 ]; then
       echo "$line" >> /tmp/compare_users.csv
+      compteur_notexist=$compteur_notre_users.logexist+1
+    else
+      compteur_exist=$compteur_exist+1
     fi
   done < "$csv_file"
   kc_logout
   echo "log: /tmp/compare_users.log";
   echo "error users csv : /tmp/compare_users.csv";
+  echo 'nombre de comptes deja existants : '"$compteur_exist"
+  echo 'nombre de comptes absents : '"$compteur_notexist"
 }
+
 
 
 # export every users
@@ -389,8 +400,8 @@ delete_accts(){
 #### Main
 if [ $# -lt 1 ]; then
   echo "Keycloak account admin script"
-  echo "Usage: $0 [--test | --delete csv_file | --import csv_file | --login_only | --export_users | --update_users csv_file comment]"
-  echo "Usage: $0 [-t | -d csv_file | -i csv_file | -l | -e | -u csv_file comment]"
+  echo "Usage: $0 [--test | --delete csv_file | --import csv_file | --login_only | --export_users | --compare_user csv_file | --update_users csv_file]"
+  echo "Usage: $0 [-t | -d csv_file | -i csv_file | -l | -e | -c csv_file |-u csv_file]"
   exit 1
 fi
 
