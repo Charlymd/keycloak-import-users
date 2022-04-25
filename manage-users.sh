@@ -47,7 +47,7 @@ kc_login() {
   result=$(curl --write-out " %{http_code}" -s -k --request POST \
     --header "Content-Type: application/x-www-form-urlencoded" \
     --data "username=$admin_id&password=$admin_pwd&client_id=$client_id&grant_type=password" \
-    "$base_url/realms/$realm/protocol/openid-connect/token")
+    "$base_url/realms/master/protocol/openid-connect/token")
 
   admin_pwd=""  #clear password
   msg="Login"
@@ -255,7 +255,7 @@ kc_logout() {
   result=$(curl --write-out " %{http_code}" -s -k --request POST \
   --header "Content-Type: application/x-www-form-urlencoded" \
   --data "client_id=$client_id&refresh_token=$refresh_token" \
-  "$base_url/realms/$realm/protocol/openid-connect/logout")
+  "$base_url/realms/master/protocol/openid-connect/logout")
 
   msg="action:logout"
   process_result "204" "$result" "$msg" #print HTTP status message
