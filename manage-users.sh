@@ -137,7 +137,7 @@ kc_delete_user() {
 ## Convert name to global userid
 kc_lookup_username() {
   username="$1"
-
+  echo "username="$username
   result=$(curl --write-out " %{http_code}" -s -k --request GET \
   --header "Authorization: Bearer $access_token" \
   "$base_url/admin/realms/$realm/users?username=${username}")
@@ -151,23 +151,25 @@ kc_lookup_username() {
 ## Check existing of user
 kc_exist_username() {
   username="$1"
-
+  echo "username="$username
   result=$(curl --write-out " %{http_code}" -s -k --request GET \
   --header "Authorization: Bearer $access_token" \
   "$base_url/admin/realms/$realm/users?username=${username}")
 
   userid=`echo $result | grep -Eo '"id":".*?"' | cut -d':'  -f 2 | sed -e 's/"//g' | cut -d',' -f 1`
-  if [ $userid ];  then
+  msg="action:check existing user   value:$username  userid:$userid"
+  process_result "200" "$result" "$msg"
+  
+  if [ -z $userid ];  then
       echo "action:user exist   value:$username  userid:$userid";
       echo "action:user exist   value:$username  userid:$userid" >> /tmp/compare_users.log;
 
     else
       echo "action:user doesnt exist   value:$username";
       echo "action:user doesnt exist   value:$username" >> /tmp/compare_users.log;
-      return 2 ; break
+      #return 2 ; break
   fi
-  process_result "200" "$result" "$msg"
-  return $? #return status from process_result
+  #return $? #return status from process_result
 }
 
 
@@ -271,6 +273,7 @@ unit_test() {
   kc_create_user john doe john.doe john@example.com
   kc_lookup_username "john.doe"
   kc_set_pwd $userid "1@test"
+  #kc_exist_username $userid
   kc_create_group "group1"
   kc_lookup_group $groupid
   kc_set_group $userid $groupid
@@ -292,14 +295,14 @@ compare_users() {
     kc_exist_username "${arr[2]}"
     if [ $? -ne 0 ]; then
       echo "$line" >> /tmp/compare_users.csv
-      compteur_notexist=$compteur_notre_users+1
+      compteur_notexist=$compteur_notexist+1
     else
       compteur_exist=$compteur_exist+1
     fi
   done < "$csv_file"
   kc_logout
   echo "log: /tmp/compare_users.log";
-  echo "error users csv : /tmp/compare_users.csv";
+  echo "not found users csv : /tmp/compare_users.csv";
   echo 'nombre de comptes deja existants : '"$compteur_exist"
   echo 'nombre de comptes absents : '"$compteur_notexist"
 }
@@ -319,7 +322,7 @@ export_users() {
   msg="action:export list of user"
   process_result "200" "$result" "$msg"
   echo "200 iterate error is normal, it's HTTP status at the end of request"
-  echo "export file: /tmp/export_users_keycloak.csv";
+  echo "exprt file: /tmp/export_users_keycloak.csv";
  return $? #return status from process_result
 }
 
@@ -334,17 +337,18 @@ update_users() {
     kc_update_user "${arr[0]}" "${arr[1]}" "${arr[2]}" "${arr[3]}" "${arr[4]}" "${arr[5]}"
 
     # update or skip when no group	    
-    if [ "${arr[6]}" ]; then
-      kc_lookup_group ${arr[6]}	    
-      if ["$groupid" == ""]; then
+    if [ -z "${arr[6]}" ]; then
+      kc_lookup_group "${arr[6]}"	    
+      if [ -z "$groupid" ]; then
            echo "group does not exist";
-           kc_create_group ${arr[6]};
-           kc_lookup_group ${arr[6]};
+           kc_create_group "${arr[6]}";
+           kc_lookup_group "${arr[6]}";
          else
            echo "group already exist"
-           kc_lookup_group ${arr[6]};
+           kc_lookup_group "${arr[6]}";
       fi
-      kc_set_group "$userid" $groupid
+      kc_set_group "$userid" "$groupid"
+      echo "Set group $groupid to $userid" 
     fi
     
     # update or skip when no password
