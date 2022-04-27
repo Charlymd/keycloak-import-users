@@ -151,23 +151,22 @@ kc_lookup_username() {
 ## Check existing of user
 kc_exist_username() {
   username="$1"
-  echo "username="$username
   result=$(curl --write-out " %{http_code}" -s -k --request GET \
   --header "Authorization: Bearer $access_token" \
   "$base_url/admin/realms/$realm/users?username=${username}")
 
   userid=`echo $result | grep -Eo '"id":".*?"' | cut -d':'  -f 2 | sed -e 's/"//g' | cut -d',' -f 1`
-  msg="action:check existing user   value:$username  userid:$userid"
+  #msg="action:check existing user   value:$username  userid:$userid"
   process_result "200" "$result" "$msg"
   
+  echo "action:check user exist   value:$username  userid:$userid";
   if [ -z $userid ];  then
-      echo "action:user exist   value:$username  userid:$userid";
-      echo "action:user exist   value:$username  userid:$userid" >> /tmp/compare_users.log;
+      echo "result: OK user exist   value:$username  userid:$userid";
+      echo "result: OK user exist   value:$username  userid:$userid" >> /tmp/compare_users.log;
 
     else
-      echo "action:user doesnt exist   value:$username";
-      echo "action:user doesnt exist   value:$username" >> /tmp/compare_users.log;
-      #return 2 ; break
+      echo "result: KO not exist   value:$username";
+      echo "result: KO not exist   value:$username" >> /tmp/compare_users.log;
   fi
   #return $? #return status from process_result
 }
@@ -375,7 +374,7 @@ import_accts() {
 
     if [ "${arr[6]}" ]; then
       kc_lookup_group "${arr[6]}";
-      if ["$groupid" == ""]; then
+      if [ "$groupid" == "" ]; then
            echo "group does not exist";
            kc_create_group "${arr[6]}";
            kc_lookup_group "${arr[6]}";
