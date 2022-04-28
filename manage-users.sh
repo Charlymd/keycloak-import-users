@@ -273,7 +273,7 @@ unit_test() {
   kc_create_user john doe john.doe john@example.com
   kc_lookup_username "john.doe"
   kc_set_pwd $userid "1@test"
-  #kc_exist_username $userid
+  kc_exist_username $userid
   kc_create_group "group1"
   kc_lookup_group $groupid
   kc_set_group $userid $groupid
@@ -314,16 +314,21 @@ export_users() {
   kc_login
   result=$(curl --write-out " %{http_code}" -s -k --request GET \
   --header "Authorization: Bearer $access_token" \
-  "$base_url/admin/realms/$realm/users?first=0") 
-  #"$base_url/admin/realms/$realm/users?briefRepresentation=true&first=0&max=10") 
+  "$base_url/admin/realms/$realm/users?briefRepresentation=true&first=0&max=10") ;
+  #"$base_url/admin/realms/$realm/users?first=0") 
+  #"$base_url/admin/realms/$realm/users?first=0&max=10") ;
+  echo "$result"; 
+  
   rm -f /tmp/export_users_keycloak.csv
   echo "$result" | jq -r '.[] | [.username,.lastName,.firstName,.attributes."olvid-company"[0],.attributes."olvid-position"[0]] | @csv' >> /tmp/export_users_keycloak.csv
+  #echo "$result"  >> /tmp/export_users_keycloak.csv
 
-  msg="action:export list of user"
+  msg="action:export list of users"
   process_result "200" "$result" "$msg"
-  echo "200 iterate error is normal, it's HTTP status at the end of request"
-  echo "exprt file: /tmp/export_users_keycloak.csv";
- return $? #return status from process_result
+  #echo "200 iterate error is normal, it's HTTP status at the end of request"
+  echo "export file: /tmp/export_users_keycloak.csv";
+  kc_logout
+  #return $? #return status from process_result
 }
 
 
