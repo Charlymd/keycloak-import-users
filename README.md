@@ -14,10 +14,21 @@ Add some functions from original repository (UKHomeOffice:keycloak-utils):
 
 ## [manage-users.sh](./manage-users.sh) - Administer Keycloak accounts from the command-line
 See [users.csv](./users.csv.example) for example format.
-### Prerequisites in the Keycloak realm:
+### Prerequisites in the Keycloak master realm:
 1. Create client (eg. keycloak_acct_admin) for this script. Access Type: public.
-1. Add the realm admin user (eg. realm_admin) to the realm
-1. In the realm admin user's settings > Client Role > "realm-management", assign it all available roles
+1. Remove right of this client on master realm, and add right on your new realm only (client roles)
+- mange-users
+- query-client
+- query-groups
+- query-realms
+- query-users
+1. Add a realm script user (eg. olvid_import_users) to the master realm
+1. In the realm user's settings > Client Role > "realm-management", assign it this available roles
+- mange-users
+- query-client
+- query-groups
+- query-realms
+- query-users
 1. In realm, enable Direct Grant API at Settings > Login
 
 
@@ -42,3 +53,8 @@ Offer capability to store configuration and bypass prompt for configuration
 Some basic test for check each function work good
 Create, lookup, affect and delete an user (John Doe) and a group (test1)
 ./import_users.sh --test
+
+## know issues
+error 500 or special caracteres appear during importing
+-> check encoding of your csv file
+to fix it in vim editor, you can use this command : set fileencoding=utf-8
