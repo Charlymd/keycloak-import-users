@@ -292,7 +292,7 @@ compare_users() {
     IFS=';' read -ra arr <<< "$line"
     # CSV file format: "first name[0];last name[1];username[2];email[3];position[4];company[5];group[6];password[7]"
     kc_exist_username "${arr[2]}"
-    if [ -z  $userid]; then
+    if [ -z  $userid ]; then
       echo "$line" >> /tmp/compare_users.csv
       compteur_notexist=$compteur_notexist+1
     else
