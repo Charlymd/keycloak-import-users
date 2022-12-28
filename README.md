@@ -58,3 +58,7 @@ Create, lookup, affect and delete an user (John Doe) and a group (test1)
 error 500 or special caracteres appear during importing
 -> check encoding of your csv file
 to fix it in vim editor, you can use this command : set fileencoding=utf-8
+
+Error during long import (> 150 accounts)
+Actual script don't support refresh token and lifespan of access token is 1 minute by default
+-> Master realm settings > tokens : set Access Token Lifespan to 3 minutes for example
