@@ -161,12 +161,12 @@ kc_exist_username() {
   
   echo "action:check user exist   value:$username  userid:$userid";
   if [ -z $userid ];  then
-      echo "result: OK user exist   value:$username  userid:$userid";
-      echo "result: OK user exist   value:$username  userid:$userid" >> /tmp/compare_users.log;
+      echo "result: NOK user not exist   value:$username";
+      echo "result: NOK user not exist   value:$username" >> /tmp/compare_users.log;
 
     else
-      echo "result: KO not exist   value:$username";
-      echo "result: KO not exist   value:$username" >> /tmp/compare_users.log;
+      echo "result: OK user exist   value:$username  userid:$userid";
+      echo "result: OK user exist   value:$username  userid:$userid" >> /tmp/compare_users.log;
   fi
   #return $? #return status from process_result
 }
@@ -292,7 +292,7 @@ compare_users() {
     IFS=';' read -ra arr <<< "$line"
     # CSV file format: "first name[0];last name[1];username[2];email[3];position[4];company[5];group[6];password[7]"
     kc_exist_username "${arr[2]}"
-    if [ $? -ne 0 ]; then
+    if [ -z  $userid]; then
       echo "$line" >> /tmp/compare_users.csv
       compteur_notexist=$compteur_notexist+1
     else
