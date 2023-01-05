@@ -43,11 +43,21 @@ kc_login() {
     read -p "Admin username: " admin_id
     read -s -p "Admin Password: " admin_pwd
   fi
-
-  result=$(curl --write-out " %{http_code}" -s -k --request POST \
+  
+  if [ -z $refresh_token ];  then
+#    result=$(curl --write-out " %{http_code}" -s -k --request POST \
+#    --header "Content-Type: application/x-www-form-urlencoded" \
+#    --data "refresh_token=$refresh_token&client_id=$client_id&grant_type=refresh_token" \
+#    "$base_url/realms/master/protocol/openid-connect/token")
+     echo "refresh_token"
+  fi
+#
+#  else 
+    result=$(curl --write-out " %{http_code}" -s -k --request POST \
     --header "Content-Type: application/x-www-form-urlencoded" \
     --data "username=$admin_id&password=$admin_pwd&client_id=$client_id&grant_type=password" \
     "$base_url/realms/master/protocol/openid-connect/token")
+#  fi
 
   admin_pwd=""  #clear password
   msg="Login"
@@ -159,14 +169,15 @@ kc_exist_username() {
   #msg="action:check existing user   value:$username  userid:$userid"
   process_result "200" "$result" "$msg"
   
-  echo "action:check user exist   value:$username  userid:$userid";
+  #echo "action:check user exist";
+  #echo "action:check user exist   value:$username  userid:$userid";
   if [ -z $userid ];  then
       echo "result: NOK user not exist   value:$username";
       echo "result: NOK user not exist   value:$username" >> /tmp/compare_users.log;
 
     else
-      echo "result: OK user exist   value:$username  userid:$userid";
-      echo "result: OK user exist   value:$username  userid:$userid" >> /tmp/compare_users.log;
+      echo "result: OK user exist   userid:$userid value:$username" ;
+      echo "result: OK user exist   userid:$userid value:$username " >> /tmp/compare_users.log;
   fi
   #return $? #return status from process_result
 }
@@ -210,8 +221,10 @@ kc_lookup_group() {
 
   result=$(curl --write-out " %{http_code}" -s -k --request GET \
   --header "Authorization: Bearer $access_token" \
-  "$base_url/admin/realms/$realm/groups?first=0&last=1&search=$group")
-  groupid=`echo $result | grep -Eo '"id":".*?"' | cut -d':'  -f 2 | sed -e 's/"//g' | cut -d',' -f 1`
+  "$base_url/admin/realms/$realm/groups?first=0&max=1&search=$group")
+  #groupid=`echo $result | grep -Eo '"id":".*?"' | cut -d':'  -f 2 | sed -e 's/"//g' | cut -d',' -f 1`
+  groupid=`echo $result | grep -Eo '"id":".*?"' | cut -d','  -f 1 | sed -e 's/"//g' | cut -d':' -f 2`
+  echo $result
   msg="action:lookup group  value:$group  id=$groupid"
   process_result "200" "$result" "$msg"
   return $? #return status from process_result
@@ -284,7 +297,6 @@ unit_test() {
 
 # check existing of user from CSV in Keycloak
 compare_users() {
-  kc_login
   rm -f /tmp/compare_users.csv
   rm -f /tmp/compare_users.log
   # Import accounts line-by-line
@@ -310,21 +322,19 @@ compare_users() {
 
 # export every users
 export_users() {
-  kc_login
   result=$(curl --write-out " %{http_code}" -s -k --request GET \
   --header "Authorization: Bearer $access_token" \
-  "$base_url/admin/realms/$realm/users?briefRepresentation=true&first=0&max=10") ;
-  #"$base_url/admin/realms/$realm/users?first=0") 
-  #"$base_url/admin/realms/$realm/users?first=0&max=10") ;
-  echo "$result"; 
-  
+  "$base_url/admin/realms/$realm/users?briefRepresentation=true&first=0&max=10000") ;
+  echo "$result" > /tmp/export_users_keycloak.json;
+  sed -i 's/ 200$/ /g' /tmp/export_users_keycloak.json 
+  echo "export file json : /tmp/export_users_keycloak.json"; 
+   
   rm -f /tmp/export_users_keycloak.csv
-  echo "$result" | jq -r '.[] | [.username,.lastName,.firstName,.attributes."olvid-company"[0],.attributes."olvid-position"[0]] | @csv' >> /tmp/export_users_keycloak.csv
-  #echo "$result"  >> /tmp/export_users_keycloak.csv
+  cat /tmp/export_users_keycloak.json | jq -r '.[] | [.username, .lastName, .firstName, .attributes."olvid-company"[0], .attributes."olvid-position"[0]] | @csv' >> /tmp/export_users_keycloak.csv
 
   msg="action:export list of users"
   process_result "200" "$result" "$msg"
-  #echo "200 iterate error is normal, it's HTTP status at the end of request"
+  cat  /tmp/export_users_keycloak.csv;
   echo "export file: /tmp/export_users_keycloak.csv";
   kc_logout
   #return $? #return status from process_result
@@ -332,7 +342,6 @@ export_users() {
 
 
 update_users() {
-  kc_login
   # Import accounts line-by-line
   while read -r line; do
     IFS=';' read -ra arr <<< "$line"
@@ -366,7 +375,6 @@ update_users() {
 # Bulk import accounts
 # Reads and creates accounts using a CSV file as the source
 import_accts() {
-  kc_login
   # Import accounts line-by-line
   while read -r line; do
     IFS=';' read -ra arr <<< "$line"
@@ -399,7 +407,6 @@ import_accts() {
 
 
 delete_accts(){
-  kc_login
   while read -r line; do
     IFS=';' read -ra arr <<< "$line"
           kc_lookup_username "${arr[2]}"
@@ -414,6 +421,9 @@ if [ $# -lt 1 ]; then
   echo "Usage: $0 [-t | -d csv_file | -i csv_file | -l | -e | -c csv_file |-u csv_file]"
   exit 1
 fi
+
+# initial login
+kc_login
 
 flag=$1
 
